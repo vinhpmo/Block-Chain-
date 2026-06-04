@@ -1,0 +1,35 @@
+Đúng rồi — trang này đang hoạt động đúng
+Từ ảnh bạn gửi, app đã kết nối và thực hiện lưu hash lên blockchain Sepolia. Dòng thông báo:
+
+Hash anchored on Sepolia Testnet contract. Tx: 0x...
+có nghĩa là:
+
+Web app đã gửi một giao dịch lên mạng Sepolia Testnet
+Giao dịch đó đã ghi một giá trị lên hợp đồng thông minh (contract)
+Tx: là mã giao dịch trên blockchain
+Cái “kết nối” ở đây nghĩa là gì
+Connect Wallet = kết nối web app với ví MetaMask của bạn
+Sau khi kết nối, app có quyền yêu cầu MetaMask ký và gửi giao dịch
+Metamask xác nhận ai đang dùng, mạng nào đang dùng, và có đủ phí không
+Blockchain được dùng để làm gì trong app này
+App của bạn dùng blockchain chỉ để:
+
+Anchoring (neo) một hash
+Lưu bằng chứng rằng một bản ghi đã được tạo vào thời điểm nào
+Đảm bảo không thể sửa lại nội dung đã đóng dấu
+Tạo “bằng chứng phân tán” cho dữ liệu mà app tạo ra
+Nói ngắn gọn:
+
+App có thể đếm vật nuôi và lưu dữ liệu nội bộ
+Blockchain chỉ dùng để lưu “hash” hoặc “tham chiếu” vào hợp đồng
+Vì vậy nếu ai đó sau này cố thay đổi dữ liệu, vẫn có thể đối chiếu với hash đã ghi trên Sepolia
+Vì sao dùng Sepolia?
+Sepolia là mạng thử nghiệm (testnet), không phải mạng chính (mainnet)
+Nó cho phép bạn thử nghiệm deploy và giao dịch mà không cần ETH thật
+Trong app của bạn, Sepolia dùng để demo anchoring hợp đồng
+Kết luận
+Đúng — trang hiện tại đã chạy và app đã gửi được giao dịch lên blockchain Sepolia
+Connect Wallet là bước bắt buộc để ký giao dịch bằng MetaMask
+Push to Contract / Push to Sepolia là bước gửi hash vào smart contract
+Blockchain ở đây chỉ dùng cho tính “bất biến” (tamper-proof proof), không phải để lưu toàn bộ dữ liệu camera hay đếm trực tiếp
+Nếu bạn muốn, tôi có thể hướng dẫn tiếp cách kiểm tra lại giao dịch trên explorer Sepolia bằng tx hash mà app hiển thị.

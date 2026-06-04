@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>AI Livestock Monitoring</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<script>
+// Move all JavaScript functions here to ensure they load before DOM elements
+const stream = document.getElementById("video-stream");
+const status = document.getElementById("stream-status");
+const prevCounts = {chicken: 0, duck: 0, pig: 0};
+
+function showStreamStatus(message) {
+    status.innerText = message;
+    status.style.display = 'flex';
+}
+
+function hideStreamStatus() {
+    status.style.display = 'none';
+}
+
+function renderCounts(data) {
+    document.getElementById("chicken-current").innerText = "Gà / Chicken: " + data.current.chicken;
+    document.getElementById("duck-current").innerText = "Vịt / Duck: " + data.current.duck;
+    document.getElementById("pig-current").innerText = "Lợn / Pig: " + data.current.pig;
+
+    document.getElementById("chicken-total").innerText = "Gà / Chicken: " + data.total.chicken;
+    document.getElementById("duck-total").innerText = "Vịt / Duck: " + data.total.duck;
+    document.getElementById("pig-total").innerText = "Lợn / Pig: " + data.total.pig;
+}
+
+function renderVideoOverlay(data) {
+    document.getElementById("overlay-chicken-current").innerText = "Gà: " + data.current.chicken;
+    document.getElementById("overlay-duck-current").innerText = "Vịt: " + data.current.duck;
+    document.getElementById("overlay-pig-current").innerText = "Lợn: " + data.current.pig;
+
+    document.getElementById("overlay-chicken-total").innerText = "Gà: " + data.total.chicken;
+    document.getElementById("overlay-duck-total").innerText = "Vịt: " + data.total.duck;
+    document.getElementById("overlay-pig-total").innerText = "Lợn: " + data.total.pig;
+}
+
+function updateInsight(data) {
+    const insight = [];
+    const currentTotal = data.current.chicken + data.current.duck + data.current.pig;
+    const totalAll = data.total.chicken + data.total.duck + data.total.pig;
+
+    // Primary status
+    if (currentTotal === 0) {
+        insight.push('Không phát hiện vật nuôi.');
+    } else if (data.current.duck > 0) {
+        insight.push(`Phát hiện ${data.current.duck} con vịt.`);
+    } else if (data.current.chicken > 0) {
+        insight.push(`Phát hiện ${data.current.chicken} con gà.`);
+    } else if (data.current.pig > 0) {
+        insight.push(`Phát hiện ${data.current.pig} con lợn.`);
+    }
+
+    // Trend analysis
+    if (totalAll > 0) {
+        const mostDetected = Math.max(data.total.chicken, data.total.duck, data.total.pig);
+        if (data.total.duck === mostDetected && data.total.duck > 0) {
+            insight.push(`Vịt được phát hiện thường xuyên nhất (tổng: ${data.total.duck}).`);
+        } else if (data.total.chicken === mostDetected && data.total.chicken > 0) {
+            insight.push(`Gà được phát hiện thường xuyên nhất (tổng: ${data.total.chicken}).`);
+        } else if (data.total.pig === mostDetected && data.total.pig > 0) {
+            insight.push(`Lợn được phát hiện thường xuyên nhất (tổng: ${data.total.pig}).`);
+        }
+    }
+
+    document.getElementById('insight').innerText = insight.slice(0, 2).join(' ');
+}
+
+function refreshCounts() {
+    fetch('/counts?ts=' + Date.now())
+        .then(res => res.json())
+        .then(data => {
+            renderCounts(data);
+            renderVideoOverlay(data);
+            updateInsight(data);
+            hideStreamStatus();
+        })
+        .catch(() => {
+            showStreamStatus('Không thể lấy số lượng hiện tại.');
+        });
+}
+
+function exportCSV() {
+    const link = document.createElement('a');
+    link.href = '/export/excel';
+    link.download = 'dem_vat_nuoi_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function resetCounts() {
+    if (confirm('Bạn chắc chắn muốn reset tổng số lượng? Số lượng hiện tại sẽ được giữ nguyên.')) {
+        fetch('/api/reset', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                console.log('Reset:', data);
+                refreshCounts();
+                alert('Đã reset tổng số lượng! Tiếp tục đếm từ đầu.');
+            })
+            .catch(err => console.log('Reset error:', err));
+}
+
+function selectVideoFile() {
+    const fileInput = document.getElementById('video-file');
+    fileInput.click();
+    fileInput.onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('video', file);
+
+            fetch('/api/upload_video', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('video-source-label').innerText = 'Nguồn video: ' + file.name;
+                    // Reload video stream
+                    const videoStream = document.getElementById('video-stream');
+                    videoStream.src = '/video?' + Date.now();
+                    showStreamStatus('Đang tải video mới...');
+                } else {
+                    alert('Lỗi tải video: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.log('Upload error:', err);
+                alert('Lỗi tải video');
+            });
+        }
+    };
+}
+
+function switchToCamera() {
+    if (confirm('Chuyển sang camera? Video hiện tại sẽ dừng.')) {
+        fetch('/api/switch_camera', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('video-source-label').innerText = 'Nguồn video: Camera';
+                    // Reload video stream
+                    const videoStream = document.getElementById('video-stream');
+                    videoStream.src = '/video?' + Date.now();
+                    showStreamStatus('Đang kết nối camera...');
+                } else {
+                    alert('Lỗi chuyển camera: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.log('Camera switch error:', err);
+                alert('Lỗi chuyển camera');
+            });
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    stream.addEventListener('load', hideStreamStatus);
+    stream.addEventListener('error', () => showStreamStatus('Không tải được nguồn video. Vui lòng kiểm tra file hoặc tải lại trang.'));
+
+    setTimeout(() => {
+        if (!stream.complete || stream.naturalWidth === 0) {
+            showStreamStatus('Đang tải video...');
+        }
+    }, 500);
+
+    // FPS slider
+    document.getElementById('fps-slider').addEventListener('input', function() {
+        document.getElementById('fps-display').innerText = this.value;
+        fetch('/api/set_fps', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fps: parseInt(this.value)})
+        });
+    });
+
+    // Auto refresh counts
+    setInterval(refreshCounts, 800);
+});
+</script>
+<div class="page-shell">
+    <header class="hero">
+        <div>
+            <h1>🐔 AI Livestock Tracking 🐷</h1>
+            <p>Phát hiện, đếm và theo dõi vật nuôi bằng YOLO để thống kê chính xác hơn và hiển thị xu hướng AI.</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <section class="video-panel card">
+            <div class="panel-header">
+                <div>
+                    <h2>Video Feed</h2>
+                    <span id="video-source-label">Nguồn video: data/farm.mp4</span>
+                </div>
+                <div class="status-badge">Real-time</div>
+            </div>
+            <div class="video-box">
+                <img id="video-stream" src="/video" alt="Live video feed">
+                <div class="video-count-overlay" id="video-count-overlay">
+                    <div class="overlay-row">Đếm trực tiếp</div>
+                    <div id="overlay-chicken-current">Gà: 0</div>
+                    <div id="overlay-duck-current">Vịt: 0</div>
+                    <div id="overlay-pig-current">Lợn: 0</div>
+                    <div class="overlay-row" style="margin-top:10px;">Tổng số</div>
+                    <div id="overlay-chicken-total">Gà: 0</div>
+                    <div id="overlay-duck-total">Vịt: 0</div>
+                    <div id="overlay-pig-total">Lợn: 0</div>
+                </div>
+                <div id="stream-status">Đang tải video...</div>
+            </div>
+            <div class="control-bar">
+                <div class="video-source-control">
+                    <input type="file" id="video-file" accept="video/*" style="display: none;">
+                    <button onclick="selectVideoFile()">📁 Chọn Video</button>
+                    <button onclick="switchToCamera()">📹 Camera</button>
+                </div>
+                <div class="fps-control">
+                    <label>FPS: <input type="range" id="fps-slider" min="1" max="60" value="30" step="1"> <span id="fps-display">30</span></label>
+                </div>
+                <button class="export-btn" onclick="exportCSV()">📊 Tải Excel</button>
+                <button class="reset-btn" onclick="resetCounts()">🔄 Reset Tổng</button>
+            </div>
+        </section>
+
+        <aside class="stats card">
+            <div class="panel-header">
+                <h2>📊 Thống kê</h2>
+                <span>Hiện tại và tổng số vật nuôi</span>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-block current">
+                    <h3>Hiện tại</h3>
+                    <p id="chicken-current">Gà / Chicken: 0</p>
+                    <p id="duck-current">Vịt / Duck: 0</p>
+                    <p id="pig-current">Lợn / Pig: 0</p>
+                </div>
+                <div class="stat-block total">
+                    <h3>Tổng số</h3>
+                    <p id="chicken-total">Gà / Chicken: 0</p>
+                    <p id="duck-total">Vịt / Duck: 0</p>
+                    <p id="pig-total">Lợn / Pig: 0</p>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item chicken"></div><span>Gà / Chicken</span>
+                <div class="legend-item duck"></div><span>Vịt / Duck</span>
+                <div class="legend-item pig"></div><span>Lợn / Pig</span>
+            </div>
+            <div class="insight-card">
+                <h3>🧠 Xu hướng AI</h3>
+                <p id="insight">Đang phân tích xu hướng...</p>
+            </div>
+        </aside>
+    </div>
+</div>
+
+</body>
+</html>

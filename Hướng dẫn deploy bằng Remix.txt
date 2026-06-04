@@ -1,0 +1,58 @@
+1. Lấy địa chỉ contract từ Remix
+Sau khi deploy contract RecordAnchor.sol bằng Remix:
+
+Remix sẽ hiển thị một địa chỉ contract ở dạng:
+0x... (bắt đầu bằng 0x, tiếp theo 40 ký tự hex)
+Ví dụ: 0xAbCd1234Ef56...
+2. Dán địa chỉ contract vào web app
+Trong web app, tìm ô:
+
+Contract address
+Dán chính xác địa chỉ contract đó vào ô này.
+
+3. Bật MetaMask sang mạng Sepolia
+Nếu MetaMask đang tiếng Việt thì bạn sẽ thấy:
+
+Mạng / Ethereum Mainnet
+Sepolia Testnet
+Nếu chưa có Sepolia:
+
+Vào Cài đặt → Thử nghiệm
+Bật Hiện các mạng thử nghiệm
+Quay lại chọn Sepolia Testnet
+4. Lấy Sepolia ETH miễn phí
+Dùng faucet testnet:
+
+https://faucet.paradigm.xyz/
+hoặc https://sepolia-faucet.pk910.de/
+Dán địa chỉ ví MetaMask của bạn vào faucet để nhận SepoliaETH.
+
+5. Kết nối wallet và thực hiện
+Nhấn Connect Wallet trong web app
+Xác nhận kết nối trong MetaMask:
+tiếng Việt có thể là Kết nối
+Nhấn Save Snapshot trong web app
+Nhấn Push to Sepolia
+MetaMask hiện popup giao dịch
+nhấn Xác nhận hoặc Confirm
+6. Kiểm tra kết quả
+Nếu thành công, web app sẽ hiển thị:
+
+Tx hash
+Chain ID là Sepolia
+Trong MetaMask, giao dịch sẽ được gửi
+Bạn có thể kiểm tra trên Sepolia Etherscan
+7. Địa chỉ contract phải đúng kiểu này
+Bắt đầu bằng 0x
+Tổng cộng 42 ký tự
+Ví dụ:
+0x5B2c4F1a2E...
+Tóm tắt nhanh
+Deploy contract trên Remix
+Sao chép địa chỉ contract 0x...
+Dán vào ô Contract address
+Chọn Sepolia Testnet
+Nhận Sepolia ETH từ faucet
+Save Snapshot
+Push to Sepolia
+Xác nhận giao dịch MetaMask

@@ -1,0 +1,1024 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>AI Livestock Monitoring</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+    <script>
+        if (typeof window.ethers === 'undefined') {
+            const fallback = document.createElement('script');
+            fallback.src = 'https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js';
+            fallback.onload = () => {
+                console.log('Ethers.js fallback loaded.');
+                if (typeof updateContractButtonState === 'function') {
+                    updateContractButtonState();
+                }
+                if (typeof window.ethereum !== 'undefined' && typeof updateBlockchainStatus === 'function') {
+                    window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
+                        return window.ethereum.request({ method: 'eth_chainId' }).then(chainId => {
+                            try {
+                                // normalize chainId to lowercase hex before updating status
+                                const normalized = (chainId || '').toString().toLowerCase();
+                                updateBlockchainStatus(normalized, accounts);
+                            } catch (err) {
+                                updateBlockchainStatus(chainId, accounts);
+                            }
+                        });
+                    }).catch(() => {});
+                }
+            };
+            fallback.onerror = () => console.error('Unable to load Ethers.js. Blockchain features may not work.');
+            document.head.appendChild(fallback);
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<div class="page-shell">
+    <header class="hero">
+        <div>
+            <h1>AI Livestock Monitoring</h1>
+            <p>Realtime video tracking and Ethereum hash anchoring for livestock data.</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <section class="video-panel card">
+            <div class="panel-header">
+                <div>
+                    <h2>Video Feed</h2>
+                    <span id="video-source-label">Video source: data/farm.mp4</span>
+                </div>
+                <div class="status-badge">Real-time</div>
+            </div>
+            <div class="video-box">
+                <img id="video-stream" src="/video" alt="Live video feed">
+                <div class="video-count-overlay" id="video-count-overlay">
+                    <div class="overlay-row">Live count</div>
+                    <div id="overlay-chicken-current">Chicken: 0</div>
+                    <div id="overlay-duck-current">Duck: 0</div>
+                    <div id="overlay-pig-current">Pig: 0</div>
+                    <div class="overlay-row" style="margin-top:10px;">Totals</div>
+                    <div id="overlay-chicken-total">Chicken: 0</div>
+                    <div id="overlay-duck-total">Duck: 0</div>
+                    <div id="overlay-pig-total">Pig: 0</div>
+                </div>
+                <div id="stream-status">Loading video...</div>
+            </div>
+            <div class="control-bar">
+                <div class="video-source-control">
+                    <input type="file" id="video-file" accept="video/*" style="display: none;" />
+                    <button id="select-video-btn">Select Video</button>
+                    <button id="switch-camera-btn">Camera</button>
+                    <input type="text" id="camera-url-input" placeholder="http://172.16.69.242:4747" style="flex:1; min-width:180px; margin-left:10px;" />
+                    <button id="set-camera-url-btn">Connect Camera URL</button>
+                </div>
+                <div class="fps-control">
+                    <label>FPS: <input type="range" id="fps-slider" min="1" max="60" value="30" step="1"> <span id="fps-display">30</span></label>
+                </div>
+                <button id="export-btn" class="export-btn">Export CSV</button>
+                <button id="reset-btn" class="reset-btn">Reset Counts</button>
+                <button id="save-snapshot-btn" class="save-btn">Save Snapshot</button>
+            </div>
+        </section>
+
+        <aside class="stats card">
+            <div class="panel-header">
+                <h2>Statistics</h2>
+                <span>Current and cumulative livestock counts</span>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-block current">
+                    <h3>Current</h3>
+                    <p id="chicken-current">Chicken: 0</p>
+                    <p id="duck-current">Duck: 0</p>
+                    <p id="pig-current">Pig: 0</p>
+                </div>
+                <div class="stat-block total">
+                    <h3>Totals</h3>
+                    <p id="chicken-total">Chicken: 0</p>
+                    <p id="duck-total">Duck: 0</p>
+                    <p id="pig-total">Pig: 0</p>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item chicken"></div><span>Chicken</span>
+                <div class="legend-item duck"></div><span>Duck</span>
+                <div class="legend-item pig"></div><span>Pig</span>
+            </div>
+            <div class="insight-card">
+                <h3>AI Trends</h3>
+                <p id="insight">Analyzing trends...</p>
+            </div>
+            <div class="trend-card">
+                <h3>Trending</h3>
+                <div id="trending-list"><p>Loading...</p></div>
+            </div>
+        </aside>
+    </div>
+
+    <section class="dashboard-card card">
+        <div class="panel-header">
+            <div>
+                <h2>Live Metrics</h2>
+                <span>Snapshot history and stream analytics</span>
+            </div>
+            <div class="status-badge">Metrics</div>
+        </div>
+        <div class="dashboard-panel">
+            <div class="summary-grid">
+                <div class="metric-card">
+                    <h3>Source</h3>
+                    <p id="current-source">Video file</p>
+                </div>
+                <div class="metric-card">
+                    <h3>FPS</h3>
+                    <p id="current-fps">10</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total</h3>
+                    <p id="daily-total">0</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Last snapshot</h3>
+                    <p id="latest-snapshot-time">None</p>
+                </div>
+                <div class="metric-card delta-card">
+                    <h3>Latest delta</h3>
+                    <p id="snapshot-delta">Waiting for snapshot data</p>
+                </div>
+            </div>
+            <div id="change-alert" class="alert-banner">No significant changes in last snapshot.</div>
+            <div class="chart-panel">
+                <canvas id="snapshotChart"></canvas>
+            </div>
+            <div class="table-wrapper">
+                <h3>Recent snapshots</h3>
+                <table id="snapshot-history-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Source</th>
+                            <th>Chicken</th>
+                            <th>Duck</th>
+                            <th>Pig</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="blockchain-card card">
+        <div class="panel-header">
+            <div>
+                <h2>Record Ledger</h2>
+                <span id="wallet-address">Wallet disconnected</span>
+            </div>
+            <div class="status-badge">Ethereum</div>
+        </div>
+        <div class="blockchain-panel">
+            <div id="blockchain-status">Sepolia Testnet required for on-chain proof. 0 ETH transaction only anchors the hash.</div>
+            <div id="blockchain-network">Network: disconnected</div>
+            <div id="blockchain-note">Select on-chain or offline hash signature. Use contract address for smart contract anchoring.</div>
+            <div class="blockchain-actions">
+                <button id="connect-wallet-btn">Connect Wallet</button>
+                <button id="push-chain-btn" disabled>Push to Sepolia</button>
+                <button id="sign-hash-btn" disabled>Sign Offline</button>
+            </div>
+            <div class="contract-control">
+                <input type="text" id="contract-address-input" placeholder="Contract address" />
+                <button id="push-contract-btn" disabled>Push to Contract</button>
+            </div>
+            <div id="contract-status" class="contract-status">Contract address not set.</div>
+            <div id="record-summary"><p>No records loaded.</p></div>
+            <div id="signature-summary"></div>
+            <div class="table-wrapper">
+                <h3>Daily Records</h3>
+                <table id="daily-records-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Chicken</th>
+                            <th>Duck</th>
+                            <th>Pig</th>
+                            <th>Total</th>
+                            <th>Hash</th>
+                            <th>Network</th>
+                            <th>Tx</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="8">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+function showStreamStatus(message) {
+    const status = document.getElementById('stream-status');
+    if (status) {
+        status.innerText = message;
+        status.style.display = 'flex';
+    }
+}
+
+function hideStreamStatus() {
+    const status = document.getElementById('stream-status');
+    if (status) status.style.display = 'none';
+}
+
+function renderCounts(data) {
+    document.getElementById('chicken-current').innerText = 'Chicken: ' + data.current.chicken;
+    document.getElementById('duck-current').innerText = 'Duck: ' + data.current.duck;
+    document.getElementById('pig-current').innerText = 'Pig: ' + data.current.pig;
+    document.getElementById('chicken-total').innerText = 'Chicken: ' + data.total.chicken;
+    document.getElementById('duck-total').innerText = 'Duck: ' + data.total.duck;
+    document.getElementById('pig-total').innerText = 'Pig: ' + data.total.pig;
+    document.getElementById('overlay-chicken-current').innerText = 'Chicken: ' + data.current.chicken;
+    document.getElementById('overlay-duck-current').innerText = 'Duck: ' + data.current.duck;
+    document.getElementById('overlay-pig-current').innerText = 'Pig: ' + data.current.pig;
+    document.getElementById('overlay-chicken-total').innerText = 'Chicken: ' + data.total.chicken;
+    document.getElementById('overlay-duck-total').innerText = 'Duck: ' + data.total.duck;
+    document.getElementById('overlay-pig-total').innerText = 'Pig: ' + data.total.pig;
+}
+
+function updateInsight(data) {
+    const insight = [];
+    const currentTotal = data.current.chicken + data.current.duck + data.current.pig;
+    const totalAll = data.total.chicken + data.total.duck + data.total.pig;
+    if (currentTotal === 0) {
+        insight.push('No livestock detected.');
+    } else {
+        if (data.current.duck > 0) insight.push(`Detected ${data.current.duck} ducks.`);
+        if (data.current.chicken > 0) insight.push(`Detected ${data.current.chicken} chickens.`);
+        if (data.current.pig > 0) insight.push(`Detected ${data.current.pig} pigs.`);
+    }
+    if (totalAll > 0) {
+        const most = Math.max(data.total.chicken, data.total.duck, data.total.pig);
+        if (most === data.total.duck) insight.push(`Top: ducks (${data.total.duck}).`);
+        else if (most === data.total.chicken) insight.push(`Top: chickens (${data.total.chicken}).`);
+        else insight.push(`Top: pigs (${data.total.pig}).`);
+    }
+    document.getElementById('insight').innerText = insight.slice(0, 2).join(' ');
+}
+
+function renderTrending(data) {
+    const list = document.getElementById('trending-list');
+    if (!data || !Array.isArray(data.trend) || data.trend.length === 0) {
+        list.innerHTML = '<p>No trending data available.</p>';
+        return;
+    }
+    const rows = data.trend.map(item => {
+        return `
+            <div class="trend-row">
+                <span>${item.animal.charAt(0).toUpperCase() + item.animal.slice(1)}</span>
+                <span>${item.count} (${item.percent}%)</span>
+            </div>
+        `;
+    }).join('');
+    const top = data.top_animal ? `<p><strong>Top growth:</strong> ${data.top_animal} (${data.top_animal_count})</p>` : '<p>No top data.</p>';
+    list.innerHTML = `${top}<div class="trend-list">${rows}</div>`;
+}
+
+function refreshTrending() {
+    fetch('/api/trending')
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Trending error', data.error);
+                document.getElementById('trending-list').innerHTML = '<p>Error loading trending data.</p>';
+                return;
+            }
+            renderTrending(data);
+        })
+        .catch(err => {
+            console.error('Trending fetch error', err);
+            document.getElementById('trending-list').innerHTML = '<p>Error loading trending data.</p>';
+        });
+}
+
+function refreshCounts() {
+    fetch('/counts?ts=' + Date.now())
+        .then(res => res.json())
+        .then(data => {
+            renderCounts(data);
+            updateInsight(data);
+            hideStreamStatus();
+            updateLiveMetrics(data);
+        })
+        .catch(() => {
+            showStreamStatus('Unable to fetch current counts.');
+        });
+}
+
+let snapshotChart = null;
+function initSnapshotChart() {
+    const ctx = document.getElementById('snapshotChart').getContext('2d');
+    snapshotChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Chicken',
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.14)',
+                    fill: true,
+                    data: []
+                },
+                {
+                    label: 'Duck',
+                    borderColor: '#f87171',
+                    backgroundColor: 'rgba(248, 113, 113, 0.14)',
+                    fill: true,
+                    data: []
+                },
+                {
+                    label: 'Pig',
+                    borderColor: '#c084fc',
+                    backgroundColor: 'rgba(192, 132, 252, 0.14)',
+                    fill: true,
+                    data: []
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#cbd5e1' }
+                },
+                tooltip: {
+                    backgroundColor: '#0f172a',
+                    titleColor: '#fff',
+                    bodyColor: '#e2e8f0'
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.12)' }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(148, 163, 184, 0.12)' }
+                }
+            }
+        }
+    });
+}
+
+function updateLiveMetrics(data) {
+    document.getElementById('current-fps').innerText = document.getElementById('fps-display').innerText;
+    document.getElementById('current-source').innerText = document.getElementById('video-source-label').innerText.replace('Video source: ', '');
+    document.getElementById('daily-total').innerText = (data.total.chicken + data.total.duck + data.total.pig).toString();
+}
+
+function refreshSnapshotHistory() {
+    fetch('/api/snapshot_history')
+        .then(res => res.json())
+        .then(snapshots => {
+            const historyTable = document.querySelector('#snapshot-history-table tbody');
+            if (!snapshots || !snapshots.length) {
+                historyTable.innerHTML = '<tr><td colspan="6">No snapshot history available.</td></tr>';
+                return;
+            }
+            const labels = [];
+            const chickens = [];
+            const ducks = [];
+            const pigs = [];
+            const latest = snapshots[0];
+            const snapshotRows = snapshots.map(snapshot => {
+                const createdAt = new Date(snapshot.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                labels.unshift(createdAt);
+                chickens.unshift(snapshot.chicken);
+                ducks.unshift(snapshot.duck);
+                pigs.unshift(snapshot.pig);
+                return `
+                    <tr>
+                        <td>${createdAt}</td>
+                        <td>${snapshot.source}</td>
+                        <td>${snapshot.chicken}</td>
+                        <td>${snapshot.duck}</td>
+                        <td>${snapshot.pig}</td>
+                        <td>${snapshot.total}</td>
+                    </tr>
+                `;
+            }).join('');
+            historyTable.innerHTML = snapshotRows;
+            document.getElementById('latest-snapshot-time').innerText = new Date(latest.created_at).toLocaleString();
+            if (snapshotChart) {
+                snapshotChart.data.labels = labels;
+                snapshotChart.data.datasets[0].data = chickens;
+                snapshotChart.data.datasets[1].data = ducks;
+                snapshotChart.data.datasets[2].data = pigs;
+                snapshotChart.update();
+            }
+            refreshSnapshotDiff();
+        })
+        .catch(err => {
+            console.error('Snapshot history error', err);
+            document.querySelector('#snapshot-history-table tbody').innerHTML = '<tr><td colspan="6">Unable to load snapshot history.</td></tr>';
+        });
+}
+
+function exportCSV() {
+    window.location.href = '/export/excel';
+}
+
+function formatSnapshotDelta(diff) {
+    if (!diff || Object.keys(diff).length === 0) {
+        return 'No earlier snapshot available.';
+    }
+    const parts = [];
+    ['chicken', 'duck', 'pig', 'total'].forEach(key => {
+        const value = diff[key];
+        if (value === 0) return;
+        const sign = value > 0 ? '+' : '';
+        parts.push(`${sign}${value} ${key}`);
+    });
+    if (!parts.length) return 'Counts unchanged.';
+    return parts.join(', ');
+}
+
+function refreshSnapshotDiff() {
+    fetch('/api/snapshot_diff')
+        .then(res => res.json())
+        .then(data => {
+            const deltaLabel = document.getElementById('snapshot-delta');
+            const alertBanner = document.getElementById('change-alert');
+            if (!data || !data.latest) {
+                if (deltaLabel) deltaLabel.innerText = 'No snapshot data available.';
+                if (alertBanner) alertBanner.innerText = 'Waiting for snapshot data to compute changes.';
+                return;
+            }
+            const diff = data.diff || {};
+            if (deltaLabel) deltaLabel.innerText = formatSnapshotDelta(diff);
+            if (alertBanner) {
+                const totalDiff = diff.total || 0;
+                if (Math.abs(totalDiff) >= 5) {
+                    alertBanner.innerText = `Alert: livestock count changed by ${totalDiff} since the last snapshot.`;
+                    alertBanner.classList.add('alert-warning');
+                } else {
+                    alertBanner.innerText = 'Livestock counts are stable since the last snapshot.';
+                    alertBanner.classList.remove('alert-warning');
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Snapshot diff error', err);
+        });
+}
+
+function resetCounts() {
+    if (!confirm('Reset counts and totals?')) return;
+    fetch('/api/reset', { method: 'POST' })
+        .then(() => refreshCounts())
+        .catch(err => console.error('Reset error', err));
+}
+
+function selectVideoFile() {
+    const input = document.getElementById('video-file');
+    input.value = '';
+    input.click();
+}
+
+function uploadSelectedVideo(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('video', file);
+    fetch('/api/upload_video', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('video-source-label').innerText = 'Video source: ' + file.name;
+                document.getElementById('video-stream').src = '/video?ts=' + Date.now();
+                showStreamStatus('Loading new video...');
+            } else {
+                alert('Video upload failed: ' + data.message);
+            }
+        })
+        .catch(err => {
+            console.error('Upload error', err);
+            alert('Video upload failed.');
+        });
+}
+
+function switchToCamera() {
+    if (!confirm('Chuyển sang camera?')) return;
+    fetch('/api/switch_camera', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('video-source-label').innerText = 'Video source: Camera';
+                document.getElementById('video-stream').src = '/video?ts=' + Date.now();
+                showStreamStatus('Connecting camera...');
+            } else {
+                alert('Camera switch failed: ' + data.message);
+            }
+        })
+        .catch(err => {
+            console.error('Switch camera error', err);
+            alert('Camera switch failed.');
+        });
+}
+
+function setCameraURL() {
+    const url = document.getElementById('camera-url-input').value.trim();
+    if (!url) {
+        alert('Please enter the camera URL.');
+        return;
+    }
+    fetch('/api/set_camera_url', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url})
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('video-source-label').innerText = 'Video source: ' + url;
+                document.getElementById('video-stream').src = '/video?ts=' + Date.now();
+                showStreamStatus('Connecting camera URL...');
+            } else {
+                alert('Camera URL connection failed: ' + data.message);
+            }
+        })
+        .catch(err => {
+            console.error('Set camera URL error', err);
+            alert('Camera URL connection failed.');
+        });
+}
+
+function updateFPS(value) {
+    document.getElementById('fps-display').innerText = value;
+    fetch('/api/fps', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fps: parseInt(value, 10)})
+    }).catch(err => console.error('FPS update error', err));
+}
+
+function fetchDailyRecords() {
+    const tbody = document.querySelector('#daily-records-table tbody');
+    tbody.innerHTML = '<tr><td colspan="8">Loading...</td></tr>';
+    fetch('/api/daily_records')
+        .then(res => res.json())
+        .then(records => {
+            if (!records.length) {
+                tbody.innerHTML = '<tr><td colspan="8">No daily records found.</td></tr>';
+                document.getElementById('record-summary').innerHTML = '<p>No records available.</p>';
+                return;
+            }
+            tbody.innerHTML = '';
+            records.forEach(record => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${record.day}</td>
+                    <td>${record.chicken}</td>
+                    <td>${record.duck}</td>
+                    <td>${record.pig}</td>
+                    <td>${record.total}</td>
+                    <td><code>${record.record_hash}</code></td>
+                    <td>${getChainName(record.chain_id)}</td>
+                    <td>${record.tx_hash ? (record.chain_id === '0x1' ? `<a href="https://etherscan.io/tx/${record.tx_hash}" target="_blank">${record.tx_hash}</a>` : record.tx_hash) : 'Not recorded'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            const latest = records[0];
+            document.getElementById('record-summary').innerHTML = `
+                <p><strong>Date:</strong> ${latest.day}</p>
+                <p><strong>Hash:</strong> <code>${latest.record_hash}</code></p>
+                <p><strong>Network:</strong> ${getChainName(latest.chain_id)}</p>
+                <p><strong>Tx:</strong> ${latest.tx_hash ? (latest.chain_id === '0x1' ? `<a href="https://etherscan.io/tx/${latest.tx_hash}" target="_blank">${latest.tx_hash}</a>` : latest.tx_hash) : 'Not recorded'}</p>
+            `;
+        })
+        .catch(err => {
+            console.error('Daily records error', err);
+            tbody.innerHTML = '<tr><td colspan="8">Failed to load records.</td></tr>';
+        });
+}
+
+function saveSnapshot() {
+    fetch('/api/save_snapshot', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success' || data.status === 'skipped') {
+                fetchDailyRecords();
+                alert(data.message || 'Snapshot saved successfully.');
+            } else {
+                alert('Snapshot save failed: ' + data.message);
+            }
+        })
+        .catch(err => {
+            console.error('Save snapshot error', err);
+            alert('Snapshot save failed.');
+        });
+}
+
+const REQUIRED_CHAIN_ID = '0xaa36a7';
+const CHAIN_NAMES = {
+    '0x1': 'Ethereum Mainnet',
+    '0x3': 'Ropsten',
+    '0x4': 'Rinkeby',
+    '0x5': 'Goerli',
+    '0x38': 'BSC Mainnet',
+    '0x89': 'Polygon Mainnet',
+    '0x13881': 'Mumbai Testnet',
+    '0xaa36a7': 'Sepolia Testnet'
+};
+
+function normalizeChainId(chainId) {
+    return chainId ? chainId.toString().trim().toLowerCase() : chainId;
+}
+
+function getChainName(chainId) {
+    const normalized = normalizeChainId(chainId);
+    if (!normalized) return 'Not recorded';
+    return CHAIN_NAMES[normalized] || `Chain ${chainId}`;
+}
+
+function hasEthereumProvider() {
+    return typeof window.ethereum !== 'undefined';
+}
+
+function hasEthers() {
+    return typeof window.ethers !== 'undefined';
+}
+
+function isValidAddress(address) {
+    return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+function updateBlockchainStatus(chainId, accounts = []) {
+    const networkLabel = document.getElementById('blockchain-network');
+    const walletLabel = document.getElementById('wallet-address');
+    const pushButton = document.getElementById('push-chain-btn');
+    const signButton = document.getElementById('sign-hash-btn');
+    const contractButton = document.getElementById('push-contract-btn');
+    const contractStatus = document.getElementById('contract-status');
+
+    const normalizedChainId = normalizeChainId(chainId);
+    const name = getChainName(normalizedChainId);
+    networkLabel.innerText = `Network: ${name} (${chainId})`;
+    const contractAddress = getContractAddress();
+    const isContractValid = isValidAddress(contractAddress);
+
+    if (!hasEthereumProvider()) {
+        contractStatus.innerText = 'MetaMask not detected; blockchain features are disabled.';
+        contractButton.disabled = true;
+        pushButton.disabled = true;
+        signButton.disabled = true;
+        walletLabel.innerText = 'Wallet disconnected';
+        return;
+    }
+    if (!hasEthers()) {
+        contractStatus.innerText = 'Ethers.js not loaded; blockchain contract functions are disabled.';
+        contractButton.disabled = true;
+        pushButton.disabled = true;
+        signButton.disabled = true;
+        return;
+    }
+
+    if (accounts.length && accounts[0]) {
+        walletLabel.innerText = `Wallet: ${accounts[0]}`;
+        signButton.disabled = false;
+    } else {
+        walletLabel.innerText = 'Wallet disconnected';
+        signButton.disabled = true;
+    }
+
+    if (normalizedChainId === REQUIRED_CHAIN_ID && accounts.length && accounts[0]) {
+        pushButton.disabled = false;
+        networkLabel.innerText += ' — ready to anchor hash on Sepolia Testnet.';
+    } else {
+        pushButton.disabled = true;
+        if (normalizedChainId !== REQUIRED_CHAIN_ID) {
+            networkLabel.innerText += ' — switch to Sepolia Testnet before anchoring.';
+        }
+    }
+
+    if (!contractAddress) {
+        contractStatus.innerText = 'Contract address not set.';
+        contractButton.disabled = true;
+    } else if (!isContractValid) {
+        contractStatus.innerText = 'Invalid contract address.';
+        contractButton.disabled = true;
+    } else {
+        contractStatus.innerText = `Contract address valid: ${contractAddress}`;
+        contractButton.disabled = !accounts.length || !accounts[0] || normalizedChainId !== REQUIRED_CHAIN_ID;
+    }
+}
+
+function getContractAddress() {
+    return document.getElementById('contract-address-input').value.trim();
+}
+
+async function updateContractButtonState() {
+    const contractButton = document.getElementById('push-contract-btn');
+    const contractAddress = getContractAddress();
+    const contractStatus = document.getElementById('contract-status');
+    if (!contractAddress) {
+        contractStatus.innerText = 'Contract address not set.';
+        contractButton.disabled = true;
+        return;
+    }
+    if (!isValidAddress(contractAddress)) {
+        contractStatus.innerText = 'Invalid contract address.';
+        contractButton.disabled = true;
+        return;
+    }
+    if (!hasEthereumProvider()) {
+        contractStatus.innerText = 'MetaMask required to verify contract address.';
+        contractButton.disabled = true;
+        return;
+    }
+    if (!hasEthers()) {
+        contractStatus.innerText = 'Ethers.js failed to load; contract button disabled.';
+        contractButton.disabled = true;
+        return;
+    }
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    const hasAccount = accounts.length && accounts[0];
+    const chainId = normalizeChainId(await window.ethereum.request({ method: 'eth_chainId' }));
+    contractStatus.innerText = `Contract address valid: ${contractAddress}`;
+    contractButton.disabled = !hasAccount || chainId !== REQUIRED_CHAIN_ID;
+}
+
+async function switchToEthereumMainnet() {
+    if (!window.ethereum) throw new Error('MetaMask not found.');
+    const chainId = normalizeChainId(await window.ethereum.request({ method: 'eth_chainId' }));
+    if (chainId === REQUIRED_CHAIN_ID) return chainId;
+
+    try {
+        await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: REQUIRED_CHAIN_ID }]
+        });
+        return REQUIRED_CHAIN_ID;
+    } catch (switchError) {
+        throw new Error('Please switch MetaMask to Sepolia Testnet and try again.');
+    }
+}
+
+function connectWallet() {
+    if (!window.ethereum) {
+        alert('Install MetaMask or a Web3 wallet to continue.');
+        return;
+    }
+    window.ethereum.request({ method: 'eth_requestAccounts' })
+        .then(async accounts => {
+            const chainId = normalizeChainId(await window.ethereum.request({ method: 'eth_chainId' }));
+            updateBlockchainStatus(chainId, accounts);
+            await updateContractButtonState();
+            if (chainId !== REQUIRED_CHAIN_ID) {
+                alert('MetaMask is not on Sepolia Testnet. Switch to Sepolia to anchor hash correctly.');
+            }
+        })
+        .catch(err => {
+            console.error('Connect wallet error', err);
+            alert('Unable to connect wallet: ' + (err.message || err));
+        });
+}
+
+function utf8ToHex(str) {
+    return Array.from(new TextEncoder().encode(str)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function pushHashToContract() {
+    if (!hasEthereumProvider()) {
+        alert('Install MetaMask to continue.');
+        return;
+    }
+    if (!hasEthers()) {
+        alert('Ethers.js is not loaded. Please reload the page.');
+        return;
+    }
+    const contractAddress = getContractAddress();
+    if (!contractAddress) {
+        alert('Enter the Ethereum contract address before anchoring the hash.');
+        return;
+    }
+    if (!isValidAddress(contractAddress)) {
+        alert('Invalid Ethereum contract address.');
+        return;
+    }
+    fetch('/api/daily_records')
+        .then(res => res.json())
+        .then(async records => {
+            if (!records.length) {
+                alert('No records available to anchor.');
+                return;
+            }
+            const latest = records[0];
+            try {
+                await switchToEthereumMainnet();
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                const signer = provider.getSigner();
+                const contract = new ethers.Contract(contractAddress, [
+                    'function storeHash(bytes32 recordHash) external'
+                ], signer);
+                const recordHashHex = latest.record_hash.startsWith('0x') ? latest.record_hash : '0x' + latest.record_hash;
+                const tx = await contract.storeHash(recordHashHex);
+                const receipt = await tx.wait();
+                const txHash = receipt.transactionHash;
+                const response = await fetch('/api/store_tx', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({record_id: latest.id, tx_hash: txHash, chain_id: normalizeChainId(window.ethereum.chainId)})
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    fetchDailyRecords();
+                    alert('Hash anchored on Sepolia Testnet contract. Tx: ' + txHash);
+                } else {
+                    alert('Transaction save failed: ' + result.message);
+                }
+            } catch (err) {
+                console.error('Push contract error', err);
+                alert(err.message || 'Smart contract transaction failed.');
+            }
+        })
+        .catch(err => {
+            console.error('Push contract error', err);
+            alert('Failed to load records.');
+        });
+}
+
+function pushHashToChain() {
+    if (!window.ethereum) {
+        alert('Install MetaMask to anchor hash on-chain.');
+        return;
+    }
+    fetch('/api/daily_records')
+        .then(res => res.json())
+        .then(async records => {
+            if (!records.length) {
+                alert('No records to anchor on-chain.');
+                return;
+            }
+            const latest = records[0];
+            try {
+                await switchToEthereumMainnet();
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                const fromAddress = accounts[0];
+                if (!fromAddress) {
+                    throw new Error('Wallet address not found.');
+                }
+                const dataHex = '0x' + utf8ToHex(latest.record_hash);
+                const txHash = await window.ethereum.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: fromAddress,
+                        to: fromAddress,
+                        value: '0x0',
+                        data: dataHex
+                    }]
+                });
+                const response = await fetch('/api/store_tx', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({record_id: latest.id, tx_hash: txHash, chain_id: normalizeChainId(window.ethereum.chainId)})
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    fetchDailyRecords();
+                    alert('Hash anchored on Sepolia Testnet. Tx: ' + txHash);
+                } else {
+                    alert('Transaction save failed: ' + result.message);
+                }
+            } catch (err) {
+                console.error('Push chain error', err);
+                alert(err.message || 'Transaction failed.');
+            }
+        })
+        .catch(err => {
+            console.error('Push chain error', err);
+            alert('Failed to load records.');
+        });
+}
+
+function signHash() {
+    if (!window.ethereum) {
+        alert('Install MetaMask or a Web3 wallet to continue.');
+        return;
+    }
+    fetch('/api/daily_records')
+        .then(res => res.json())
+        .then(async records => {
+            if (!records.length) {
+                alert('No records available to sign.');
+                return;
+            }
+            const latest = records[0];
+            const message = `Record hash: ${latest.record_hash}`;
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            if (!accounts.length) {
+                throw new Error('Connect your wallet first.');
+            }
+            const signature = await window.ethereum.request({
+                method: 'personal_sign',
+                params: [message, accounts[0]]
+            });
+            document.getElementById('signature-summary').innerHTML = `
+                <p><strong>Offline hash signature:</strong></p>
+                <p><code>${signature}</code></p>
+            `;
+            alert('Hash signed successfully. Copy the signature for verification.');
+        })
+        .catch(err => {
+            console.error('Sign hash error', err);
+            alert('Hash signing failed: ' + err.message);
+        });
+}
+
+async function init() {
+    document.getElementById('select-video-btn').addEventListener('click', selectVideoFile);
+    document.getElementById('switch-camera-btn').addEventListener('click', switchToCamera);
+    document.getElementById('set-camera-url-btn').addEventListener('click', setCameraURL);
+    document.getElementById('export-btn').addEventListener('click', exportCSV);
+    document.getElementById('reset-btn').addEventListener('click', resetCounts);
+    document.getElementById('save-snapshot-btn').addEventListener('click', saveSnapshot);
+    document.getElementById('connect-wallet-btn').addEventListener('click', connectWallet);
+    document.getElementById('push-chain-btn').addEventListener('click', pushHashToChain);
+    document.getElementById('push-contract-btn').addEventListener('click', pushHashToContract);
+    document.getElementById('sign-hash-btn').addEventListener('click', signHash);
+    document.getElementById('video-file').addEventListener('change', uploadSelectedVideo);
+    document.getElementById('fps-slider').addEventListener('input', e => updateFPS(e.target.value));
+
+    fetch('/api/fps')
+        .then(res => res.json())
+        .then(data => {
+            const fps = data.fps || 10;
+            const slider = document.getElementById('fps-slider');
+            if (slider) slider.value = fps;
+            document.getElementById('fps-display').innerText = fps;
+        })
+        .catch(err => console.error('Error fetching current FPS:', err));
+
+    if (window.ethereum) {
+        try {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            const chainId = normalizeChainId(await window.ethereum.request({ method: 'eth_chainId' }));
+            updateBlockchainStatus(chainId, accounts);
+            await updateContractButtonState();
+        } catch (err) {
+            console.warn('Unable to read MetaMask account state on load:', err);
+        }
+    }
+
+    const videoStream = document.getElementById('video-stream');
+    videoStream.addEventListener('load', hideStreamStatus);
+    videoStream.addEventListener('error', () => showStreamStatus('Unable to load video source. Check file or refresh.'));
+    setTimeout(() => {
+        if (!videoStream.complete || videoStream.naturalWidth === 0) {
+            showStreamStatus('Loading video...');
+        }
+    }, 500);
+
+    if (window.ethereum) {
+        window.ethereum.on('chainChanged', async (chainId) => {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            updateBlockchainStatus(normalizeChainId(chainId), accounts);
+        });
+        window.ethereum.on('accountsChanged', async (accounts) => {
+            const chainId = normalizeChainId(await window.ethereum.request({ method: 'eth_chainId' }));
+            updateBlockchainStatus(chainId, accounts);
+            updateContractButtonState();
+        });
+    }
+
+    document.getElementById('contract-address-input').addEventListener('input', updateContractButtonState);
+    updateContractButtonState();
+    initSnapshotChart();
+    refreshCounts();
+    refreshTrending();
+    refreshSnapshotHistory();
+    fetchDailyRecords();
+    setInterval(refreshCounts, 1500);
+    setInterval(refreshTrending, 5000);
+    setInterval(refreshSnapshotHistory, 15000);
+    setInterval(refreshSnapshotDiff, 15000);
+    setInterval(fetchDailyRecords, 30000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

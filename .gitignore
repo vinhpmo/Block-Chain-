@@ -1,0 +1,12 @@
+.venv/
+venv/
+BaiTapLon/venv/
+__pycache__/
+*.pyc
+
+*.db
+*.sqlite3
+
+.env
+
+runs/
